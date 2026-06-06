@@ -1,0 +1,283 @@
+openapi: 3.0.3
+info:
+  title: Ceramics Marketplace API - Orders Domain
+  version: 1.0.0
+  description: API для керування індивідуальними замовленнями кераміки.
+servers:
+  - url: https://api.ceramics-app.com/v1
+    description: Production Server (v1)
+
+paths:
+  /orders:
+    get:
+      summary: Отримати список замовлень
+      description: Повертає список замовлень із підтримкою пагінації, фільтрації та сортування.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page[number]
+          in: query
+          description: Номер сторінки (починається з 1)
+          schema:
+            type: integer
+            default: 1
+        - name: page[size]
+          in: query
+          description: Кількість елементів на сторінці
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          description: Поле для сортування (мінус для спадання)
+          schema:
+            type: string
+            example: "-createdAt"
+        - name: filter[status]
+          in: query
+          description: Фільтрація за статусом
+          schema:
+            type: string
+            enum: [draft, active, in_progress, completed, cancelled]
+      responses:
+        '200':
+          description: Успішне отримання списку
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      summary: Створити нове замовлення
+      description: Створює специфікацію нового керамічного виробу.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+      responses:
+        '201':
+          description: Замовлення успішно створено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /orders/{orderId}:
+    get:
+      summary: Отримати деталі замовлення
+      description: Повертає об'єкт замовлення напряму.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Деталі замовлення
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      summary: Часткове оновлення замовлення
+      description: Оновлює лише передані поля замовлення.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderPatchRequest'
+      responses:
+        '200':
+          description: Успішно оновлено
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /orders/{orderId}:hold-funds:
+    post:
+      summary: Резервування коштів (Custom Method)
+      description: Нестандартна дія. Заморожує кошти замовника для взяття замовлення в роботу.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+              required:
+                - amount
+      responses:
+        '200':
+          description: Кошти успішно зарезервовано
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Бізнес-конфлікт (наприклад, невідповідний статус замовлення)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        clientId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: "Чашка ручної роботи"
+        description:
+          type: string
+        minPrice:
+          type: number
+        maxPrice:
+          type: number
+        status:
+          type: string
+          enum: [draft, active, in_progress, completed, cancelled]
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-06-15T14:30:00Z"
+
+    OrderCreateRequest:
+      type: object
+      required:
+        - title
+        - description
+        - maxPrice
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        minPrice:
+          type: number
+        maxPrice:
+          type: number
+
+    OrderPatchRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        maxPrice:
+          type: number
+
+    OrderListResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+        page:
+          $ref: '#/components/schemas/Pagination'
+
+    Pagination:
+      type: object
+      properties:
+        number:
+          type: integer
+          example: 1
+        size:
+          type: integer
+          example: 20
+        totalItems:
+          type: integer
+          example: 45
+        totalPages:
+          type: integer
+          example: 3
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "VALIDATION_FAILED"
+            message:
+              type: string
+              example: "Передані дані не пройшли перевірку."
+            details:
+              type: object
+
+  responses:
+    BadRequest:
+      description: Некоректний запит (наприклад, помилка валідації)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Відсутній або недійсний токен
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Ресурс не знайдено
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
