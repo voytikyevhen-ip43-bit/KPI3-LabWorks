@@ -7,7 +7,6 @@ import { MasterProfileUpdatedEvent } from '../contract/events/master-profile-upd
 export class MarketplaceController {
   private readonly logger = new Logger(MarketplaceController.name);
 
-  // Підписуємось на подію оновлення профілю
   @EventPattern('master.profile.updated')
   async handleMasterProfileUpdated(@Payload() data: MasterProfileUpdatedEvent) {
     this.logger.log(`Отримано подію оновлення профілю для майстра: ${data.masterId}`);
